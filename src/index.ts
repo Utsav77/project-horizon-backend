@@ -1,6 +1,7 @@
 import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import pool from './config/database';
+import redisClient, { connectRedis } from './config/redis';
 
 dotenv.config();
 
@@ -11,22 +12,35 @@ app.use(express.json());
 
 app.get('/health', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT NOW()');
+    const dbResult = await pool.query('SELECT NOW()');
+    await redisClient.ping();
+
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       database: 'connected',
-      dbTime: result.rows[0].now,
+      redis: 'connected',
+      dbTime: dbResult.rows[0].now,
     });
   } catch (error) {
     res.status(500).json({
       status: 'error',
       timestamp: new Date().toISOString(),
-      database: 'disconnected',
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+const startServer = async () => {
+  try {
+    await connectRedis();
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
