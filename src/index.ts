@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import dotenv from 'dotenv';
 import pool from './config/database';
 import redisClient, { connectRedis } from './config/redis';
+import { createUsersTable } from './models/user.model';
 
 dotenv.config();
 
@@ -34,6 +35,7 @@ app.get('/health', async (req: Request, res: Response) => {
 const startServer = async () => {
   try {
     await connectRedis();
+    await createUsersTable();
     app.listen(port, () => {
       console.log(`Server running on port ${port}`);
     });
