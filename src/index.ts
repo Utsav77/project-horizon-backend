@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import pool from './config/database';
 import redisClient, { connectRedis } from './config/redis';
 import { createUsersTable } from './models/user.model';
+import authRoutes from './routes/auth.routes'; // ADD THIS
 
 dotenv.config();
 
@@ -32,12 +33,22 @@ app.get('/health', async (req: Request, res: Response) => {
   }
 });
 
+// Register auth routes
+app.use('/auth', authRoutes);
+
+// 404 handler
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
 const startServer = async () => {
   try {
     await connectRedis();
     await createUsersTable();
     app.listen(port, () => {
       console.log(`Server running on port ${port}`);
+      console.log(`API available at http://localhost:${port}`);
+      console.log(`Auth endpoints at http://localhost:${port}/auth`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
