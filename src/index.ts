@@ -3,7 +3,9 @@ import dotenv from 'dotenv';
 import pool from './config/database';
 import redisClient, { connectRedis } from './config/redis';
 import { createUsersTable } from './models/user.model';
-import authRoutes from './routes/auth.routes'; // ADD THIS
+import { createInstrumentsTable } from './models/instrument.model'; 
+import authRoutes from './routes/auth.routes';
+import marketRoutes from './routes/market.routes'; 
 
 dotenv.config();
 
@@ -33,8 +35,9 @@ app.get('/health', async (req: Request, res: Response) => {
   }
 });
 
-// Register auth routes
+// Register routes
 app.use('/auth', authRoutes);
+app.use('/market', marketRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
@@ -45,6 +48,7 @@ const startServer = async () => {
   try {
     await connectRedis();
     await createUsersTable();
+    await createInstrumentsTable();
     app.listen(port, () => {
       console.log(`Server running on port ${port}`);
       console.log(`API available at http://localhost:${port}`);
