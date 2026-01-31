@@ -15,6 +15,8 @@ export interface Quote {
   previousClose: number;
   volume: number;
   timestamp: number;
+  dataSource: 'finnhub' | 'alphavantage' | 'mock';
+  isRealTime: boolean; 
 }
 
 class MarketDataService {
@@ -69,6 +71,8 @@ class MarketDataService {
       previousClose,
       volume: 0, // Finnhub doesn't provide volume in quote endpoint
       timestamp: Date.now(),
+      dataSource: 'finnhub', 
+      isRealTime: true
     };
   }
 
@@ -104,6 +108,8 @@ class MarketDataService {
       previousClose,
       volume: parseInt(data['06. volume']),
       timestamp: Date.now(),
+      dataSource: 'alphavantage', 
+      isRealTime: true
     };
   }
    // Generate mock data
@@ -132,6 +138,8 @@ class MarketDataService {
       previousClose: parseFloat(previousClose.toFixed(2)),
       volume: Math.floor(Math.random() * 10000000),
       timestamp: Date.now(),
+      dataSource: 'mock', 
+      isRealTime: false
     };
   }
 
