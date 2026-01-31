@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { upsertInstrument, getInstrumentBySymbol } from '../models/instrument.model';
+import stockSimulator from '../utils/stock-simulator';
 
 const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY;
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY;
@@ -112,20 +113,33 @@ class MarketDataService {
       isRealTime: true
     };
   }
+
+  private lastMockPrices: Map<string, number> = new Map();
    // Generate mock data
-  private getMockQuote(symbol: string): Quote {
-    const basePrice = this.getBasePriceForSymbol(symbol);
-    // Random movement within ±2%
-    const randomChange = (Math.random() - 0.5) * 0.04;
-    const price = basePrice * (1 + randomChange);
+   private getMockQuote(symbol: string): Quote {
+    const params = stockSimulator.getSymbolParameters(symbol);
     
-    const previousClose = basePrice;
+    // Get last price or use base price
+    const lastPrice = this.lastMockPrices.get(symbol) || params.basePrice;
+
+    // Generate next price using GBM
+    const price = stockSimulator.generateNextPrice(
+      lastPrice,
+      params.drift,
+      params.volatility,
+      1 / (252 * 78) // 1-minute intervals (252 trading days, 6.5 hours)
+    );
+
+    // Store for next call (creates continuous price path)
+    this.lastMockPrices.set(symbol, price);
+
+    const previousClose = params.basePrice;
     const change = price - previousClose;
     const changePercent = (change / previousClose) * 100;
     
-    const open = previousClose * (1 + (Math.random() - 0.5) * 0.01);
-    const high = Math.max(price, open) * (1 + Math.random() * 0.01);
-    const low = Math.min(price, open) * (1 - Math.random() * 0.01);
+    const open = previousClose * (1 + stockSimulator['randomNormal'](0, 0.005));
+    const high = Math.max(price, open, lastPrice) * (1 + Math.random() * 0.005);
+    const low = Math.min(price, open, lastPrice) * (1 - Math.random() * 0.005);
 
     return {
       symbol: symbol.toUpperCase(),
@@ -138,26 +152,9 @@ class MarketDataService {
       previousClose: parseFloat(previousClose.toFixed(2)),
       volume: Math.floor(Math.random() * 10000000),
       timestamp: Date.now(),
-      dataSource: 'mock', 
+      dataSource: 'mock',
       isRealTime: false
     };
-  }
-
-   // Get consistent base price for symbol for mock data
-  private getBasePriceForSymbol(symbol: string): number {
-    const prices: Record<string, number> = {
-      AAPL: 180,
-      GOOGL: 140,
-      MSFT: 380,
-      AMZN: 170,
-      TSLA: 250,
-      META: 480,
-      NVDA: 880,
-      JPM: 190,
-      V: 270,
-      JNJ: 160,
-    };
-    return prices[symbol.toUpperCase()] || 100;
   }
 
    // Get multiple quotes at once
