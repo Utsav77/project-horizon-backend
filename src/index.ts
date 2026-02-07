@@ -1,16 +1,19 @@
 import express, { Express, Request, Response } from 'express';
+import { createServer } from 'http';
 import dotenv from 'dotenv';
 import pool from './config/database';
 import redisClient, { connectRedis } from './config/redis';
 import { createUsersTable } from './models/user.model';
-import { createInstrumentsTable } from './models/instrument.model'; 
+import { createInstrumentsTable } from './models/instrument.model';
 import authRoutes from './routes/auth.routes';
-import marketRoutes from './routes/market.routes'; 
+import marketRoutes from './routes/market.routes';
+import { initializeWebSocket } from './config/websocket';
 
 dotenv.config();
 
 const app: Express = express();
 const port = process.env.PORT || 3000;
+const httpServer = createServer(app);
 
 app.use(express.json());
 
@@ -35,7 +38,6 @@ app.get('/health', async (req: Request, res: Response) => {
   }
 });
 
-// Register routes
 app.use('/auth', authRoutes);
 app.use('/market', marketRoutes);
 
@@ -49,10 +51,15 @@ const startServer = async () => {
     await connectRedis();
     await createUsersTable();
     await createInstrumentsTable();
-    app.listen(port, () => {
+
+    const io = initializeWebSocket(httpServer);
+    console.log('WebSocket server initialized', io);
+
+    httpServer.listen(port, () => {
       console.log(`Server running on port ${port}`);
       console.log(`API available at http://localhost:${port}`);
       console.log(`Auth endpoints at http://localhost:${port}/auth`);
+      console.log(`WebSocket available at ws://localhost:${port}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
