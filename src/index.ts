@@ -8,6 +8,7 @@ import { createInstrumentsTable } from './models/instrument.model';
 import authRoutes from './routes/auth.routes';
 import marketRoutes from './routes/market.routes';
 import { initializeWebSocket } from './config/websocket';
+import websocketMarketService from './services/websocket-market.service';
 
 dotenv.config();
 
@@ -54,6 +55,9 @@ const startServer = async () => {
 
     const io = initializeWebSocket(httpServer);
     console.log('WebSocket server initialized', io);
+
+    await websocketMarketService.initialize(io);
+    console.log('WebSocket market service initialized');
 
     httpServer.listen(port, () => {
       console.log(`Server running on port ${port}`);
