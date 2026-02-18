@@ -9,6 +9,7 @@ import authRoutes from './routes/auth.routes';
 import marketRoutes from './routes/market.routes';
 import { initializeWebSocket } from './config/websocket';
 import websocketMarketService from './services/websocket-market.service';
+import priceUpdaterService from './services/price-updater.service';
 
 dotenv.config();
 
@@ -58,6 +59,22 @@ const startServer = async () => {
 
     await websocketMarketService.initialize(io);
     console.log('WebSocket market service initialized');
+
+    priceUpdaterService.start();
+    console.log('Price updater started');
+
+    // Graceful shutdown handling
+    process.on('SIGTERM', async () => {
+      console.log('SIGTERM received, shutting down gracefully...');
+      priceUpdaterService.stop();
+      process.exit(0);
+    });
+
+    process.on('SIGINT', async () => {
+      console.log('SIGINT received, shutting down gracefully...');
+      priceUpdaterService.stop();
+      process.exit(0);
+    });
 
     httpServer.listen(port, () => {
       console.log(`Server running on port ${port}`);

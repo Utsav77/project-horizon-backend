@@ -27,6 +27,25 @@ class WebSocketMarketService {
     });
   }
 
+  private async addActiveSymbol(symbol: string): Promise<void> {
+    await redisClient.sAdd('active_symbols', symbol);
+  }
+
+  private async removeActiveSymbol(symbol: string): Promise<void> {
+    await redisClient.sRem('active_symbols', symbol);
+  }
+
+  async getActiveSymbols(): Promise<string[]> {
+    try {
+      const symbols = await redisClient.sMembers('active_symbols');
+      return symbols;
+    } catch (error) {
+      console.error('Failed to get active symbols:', error);
+      return [];
+    }
+  }
+
+  // Update the subscribe handler:
   private handleSocketConnection(socket: AuthenticatedSocket): void {
     socket.on('subscribe', async (data: { symbol: string }) => {
       try {
@@ -35,13 +54,13 @@ class WebSocketMarketService {
 
         socket.join(room);
         console.log(`User ${socket.userId} subscribed to ${symbol}`);
-        // If this is the first subscriber to this symbol, subscribe to Redis
+        // If this is the first subscriber to this symbol
         if (!this.subscribedSymbols.has(symbol)) {
-          await this.redisSubscriber.subscribe(room, (message) => {
-            // This callback is called when message arrives
-            // But we handle it globally in redisSubscriber.on('message') above
-          });
+          await this.redisSubscriber.subscribe(room, (message) => {});
           this.subscribedSymbols.add(symbol);
+          
+          // Track in Redis so background job knows to fetch prices
+          await this.addActiveSymbol(symbol);
           console.log(`Subscribed to Redis channel: ${room}`);
         }
 
@@ -71,6 +90,8 @@ class WebSocketMarketService {
         if (!socketsInRoom || socketsInRoom.length === 0) {
           await this.redisSubscriber.unsubscribe(room);
           this.subscribedSymbols.delete(symbol);
+          // Remove from active symbols
+          await this.removeActiveSymbol(symbol);
           console.log(`Unsubscribed from Redis channel: ${room}`);
         }
 

@@ -21,22 +21,37 @@ export interface Quote {
 }
 
 class MarketDataService {
+  private rateLimitHit: boolean = false;
+  private rateLimitResetTime: number = 0;
   /**
    * Get current quote for a symbol
    * Tries Finnhub first(60 req/min), falls back to Alpha Vantage(5 req/min), then mock data
    */
   async getQuote(symbol: string): Promise<Quote> {
+    // Check if we're in rate limit cooldown
+    if (this.rateLimitHit && Date.now() < this.rateLimitResetTime) {
+      console.warn(`Rate limit active, using mock data for ${symbol}`);
+      const quote = this.getMockQuote(symbol);
+      return { ...quote, dataSource: 'mock', isRealTime: false };
+    }
     try {
-      return await this.getQuoteFromFinnhub(symbol);
-    } catch (error) {
-      console.warn(`Finnhub failed for ${symbol}, trying Alpha Vantage...`, error);
-      
-      try {
-        return await this.getQuoteFromAlphaVantage(symbol);
-      } catch (error2) {
-        console.warn(`Alpha Vantage failed for ${symbol}, using mock data...`, error2);
-        return this.getMockQuote(symbol);
+      const quote = await this.getQuoteFromFinnhub(symbol);
+      // Reset rate limit flag on success
+      this.rateLimitHit = false;
+      return { ...quote, dataSource: 'finnhub', isRealTime: true };
+    } catch (error: any) {
+      // Check if it's a rate limit error
+      if (error.response?.status === 429 || error.message?.includes('rate limit')) {
+        console.warn(`Finnhub rate limit hit, switching to mock data for 60 seconds`);
+        this.rateLimitHit = true;
+        this.rateLimitResetTime = Date.now() + 60000; // 1 minute cooldown
+        const quote = this.getMockQuote(symbol);
+        return { ...quote, dataSource: 'mock', isRealTime: false };
       }
+      // Other errors, try Alpha Vantage or mock
+      console.warn(`Finnhub failed for ${symbol}, using mock data`);
+      const quote = this.getMockQuote(symbol);
+      return { ...quote, dataSource: 'mock', isRealTime: false };
     }
   }
 
