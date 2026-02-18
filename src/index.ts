@@ -54,7 +54,7 @@ const startServer = async () => {
     await createInstrumentsTable();
 
     const io = initializeWebSocket(httpServer);
-    console.log('WebSocket server initialized', io);
+    console.log('WebSocket server initialized');
 
     await websocketMarketService.initialize(io);
     console.log('WebSocket market service initialized');
