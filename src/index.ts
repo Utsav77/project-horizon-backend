@@ -48,6 +48,73 @@ app.use((req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+
+async function gracefulShutdown(signal: string): Promise<void> {
+  console.log(`\n ${signal} received, starting graceful shutdown...`);
+
+  // If cleanup hangs, we need to die anyway (Docker/K8s will SIGKILL us)
+  // Better to exit on our terms than be killed
+  const forceExitTimeout = setTimeout(() => {
+    console.error('Graceful shutdown timeout exceeded (10s), forcing exit');
+    process.exit(1); // Exit code 1 = abnormal termination
+  }, 10000);
+
+  try {
+    // 1. Stop accepting new HTTP requests
+    console.log('Closing HTTP server...');
+    await new Promise<void>((resolve) => {
+      httpServer.close(() => {
+        console.log('HTTP server closed');
+        resolve();
+      });
+    });
+
+    // 2. Stop background jobs
+    console.log('Stopping price updater...');
+    await priceUpdaterService.shutdown();
+    console.log('Price updater stopped');
+
+    // 3. Close WebSocket connections gracefully
+    console.log('Closing WebSocket connections...');
+    // Socket.io will close all connections when server closes
+    
+    // 4. Close database connection pool
+    console.log('Closing database connections...');
+    await pool.end();
+    console.log('Database connections closed');
+
+    // 5. Close Redis connections
+    console.log('Closing Redis connections...');
+    await redisClient.quit();
+    console.log('Redis connections closed');
+
+    // Cancel force exit and exit cleanly
+    clearTimeout(forceExitTimeout);
+    console.log('Graceful shutdown complete');
+    process.exit(0); // Exit code 0 = success
+
+  } catch (error) {
+    console.error('Error during graceful shutdown:', error);
+    clearTimeout(forceExitTimeout);
+    process.exit(1);
+  }
+}
+
+// Register shutdown handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// 📚 Uncaught errors should also trigger shutdown
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('unhandledRejection');
+});
+
 const startServer = async () => {
   try {
     await connectRedis();
@@ -62,19 +129,6 @@ const startServer = async () => {
 
     priceUpdaterService.start();
     console.log('Price updater started');
-
-    // Graceful shutdown handling
-    process.on('SIGTERM', async () => {
-      console.log('SIGTERM received, shutting down gracefully...');
-      priceUpdaterService.stop();
-      process.exit(0);
-    });
-
-    process.on('SIGINT', async () => {
-      console.log('SIGINT received, shutting down gracefully...');
-      priceUpdaterService.stop();
-      process.exit(0);
-    });
 
     httpServer.listen(port, () => {
       console.log(`Server running on port ${port}`);
