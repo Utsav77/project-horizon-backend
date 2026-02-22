@@ -11,7 +11,7 @@ export interface AuthenticatedSocket extends Socket {
 export function initializeWebSocket(httpServer: HTTPServer): SocketIOServer {
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL || '*',
+      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
       credentials: true,
     },
     transports: ['websocket', 'polling'],
